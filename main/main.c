@@ -60,11 +60,7 @@ const char* led_tag = "leds";
 static const char *TAG = "pwm_lamp";
 uint8_t led1 = GPIO_NUM_21;   // default debug led on pwm led lamp board
 
-//uint8_t led2 = GPIO_NUM_16;
-
-
 // i-wire global variables
-
 // install 1-wire bus
 onewire_bus_handle_t bus = NULL;
 onewire_bus_config_t bus_config = {
@@ -212,15 +208,14 @@ void start_mdns_service(void) {
     // Set the hostname for the device
     const char* name = CONFIG_MY_MDNS_NAME;
     ESP_ERROR_CHECK(mdns_hostname_set(name));
-    ESP_LOGI(TAG, "mDNS hostname set to: %s.local", name);
+    ESP_LOGI("mDNS", "mDNS hostname set to: %s.local", name);
 
     // Set an optional instance name
-    ESP_ERROR_CHECK(mdns_instance_name_set("ESP32 PWM LAMP"));
+    ESP_ERROR_CHECK(mdns_instance_name_set(name));
 
     // Advertise a service over mDNS (HTTP service on port 80)
-    ESP_ERROR_CHECK(mdns_service_add("ESP32-web", "_http", "_tcp", 80, NULL, 0));
-
-    ESP_LOGI(TAG, "mDNS service added: http://%s.local/hello", name);
+    ESP_ERROR_CHECK(mdns_service_add(name, "_http", "_tcp", 80, NULL, 0));
+    ESP_LOGI("mDNS", "mDNS service added: http://%s.local/hello", name);
 }
 
 /*
@@ -244,70 +239,10 @@ static char* create_json_response(struct dht11_reading reading)
 */
 
 /* An HTTP GET handler */
-static esp_err_t hello_get_handler(httpd_req_t *req)
+static esp_err_t info_get_handler(httpd_req_t *req)
 {
     char*  buf;
     size_t buf_len;
-
-    /* Get header value string length and allocate memory for length + 1,
-     * extra byte for null termination */
-    /*buf_len = httpd_req_get_hdr_value_len(req, "Host") + 1;
-    if (buf_len > 1) {
-        buf = malloc(buf_len);
-        //Copy null terminated value string into buffer 
-        if (httpd_req_get_hdr_value_str(req, "Host", buf, buf_len) == ESP_OK) {
-            ESP_LOGI(TAG, "Found header => Host: %s", buf);
-        }
-        free(buf);
-    }
-
-    buf_len = httpd_req_get_hdr_value_len(req, "Test-Header-2") + 1;
-    if (buf_len > 1) {
-        buf = malloc(buf_len);
-        if (httpd_req_get_hdr_value_str(req, "Test-Header-2", buf, buf_len) == ESP_OK) {
-            ESP_LOGI(TAG, "Found header => Test-Header-2: %s", buf);
-        }
-        free(buf);
-    }
-
-    buf_len = httpd_req_get_hdr_value_len(req, "Test-Header-1") + 1;
-    if (buf_len > 1) {
-        buf = malloc(buf_len);
-        if (httpd_req_get_hdr_value_str(req, "Test-Header-1", buf, buf_len) == ESP_OK) {
-            ESP_LOGI(TAG, "Found header => Test-Header-1: %s", buf);
-        }
-        free(buf);
-    }
-    */
-    /* Read URL query string length and allocate memory for length + 1,
-     * extra byte for null termination */
-    /*
-    buf_len = httpd_req_get_url_query_len(req) + 1;
-    if (buf_len > 1) {
-        buf = malloc(buf_len);
-        if (httpd_req_get_url_query_str(req, buf, buf_len) == ESP_OK) {
-            ESP_LOGI(TAG, "Found URL query => %s", buf);
-            char param[EXAMPLE_HTTP_QUERY_KEY_MAX_LEN], dec_param[EXAMPLE_HTTP_QUERY_KEY_MAX_LEN] = {0};
-            ///Get value of expected key from query string 
-            if (httpd_query_key_value(buf, "query1", param, sizeof(param)) == ESP_OK) {
-                ESP_LOGI(TAG, "Found URL query parameter => query1=%s", param);
-                example_uri_decode(dec_param, param, strnlen(param, EXAMPLE_HTTP_QUERY_KEY_MAX_LEN));
-                ESP_LOGI(TAG, "Decoded query parameter => %s", dec_param);
-            }
-            if (httpd_query_key_value(buf, "query3", param, sizeof(param)) == ESP_OK) {
-                ESP_LOGI(TAG, "Found URL query parameter => query3=%s", param);
-                example_uri_decode(dec_param, param, strnlen(param, EXAMPLE_HTTP_QUERY_KEY_MAX_LEN));
-                ESP_LOGI(TAG, "Decoded query parameter => %s", dec_param);
-            }
-            if (httpd_query_key_value(buf, "query2", param, sizeof(param)) == ESP_OK) {
-                ESP_LOGI(TAG, "Found URL query parameter => query2=%s", param);
-                example_uri_decode(dec_param, param, strnlen(param, EXAMPLE_HTTP_QUERY_KEY_MAX_LEN));
-                ESP_LOGI(TAG, "Decoded query parameter => %s", dec_param);
-            }
-        }
-        free(buf);
-    }
-    */
 
     /* Set some custom headers */
     httpd_resp_set_hdr(req, "Custom-Header-1", "Custom-Value-1");
@@ -349,33 +284,6 @@ static esp_err_t hello_get_handler(httpd_req_t *req)
         ESP_LOGI(TAG,"Failed to create JSON!\n");
     }
     
-
-
-
-    // if we want to show here ds18b20 reading
-    
-
-    /*struct dht11_reading reading;
-    if (xQueuePeek(dht11_queue, &reading, 0) == pdTRUE)
-    {
-        char *json_response = create_json_response(reading);
-        if (json_response != NULL)
-        {
-            httpd_resp_set_type(req, "application/json");
-            httpd_resp_send(req, json_response, strlen(json_response));
-            free(json_response);
-        }
-        else
-        {
-            httpd_resp_send_500(req);
-        }
-    }
-    else
-    {
-        httpd_resp_send_500(req);
-    }
-    */
-
     /* After sending the HTTP response the old HTTP request
      * headers are lost. Check if HTTP request headers can be read now. */
     if (httpd_req_get_hdr_value_len(req, "Host") == 0) {
@@ -384,56 +292,14 @@ static esp_err_t hello_get_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
-static const httpd_uri_t hello = {
-    .uri       = "/hello",
+static const httpd_uri_t info = {
+    .uri       = "/info",
     .method    = HTTP_GET,
-    .handler   = hello_get_handler,
-    /* Let's pass response string in user
-     * context to demonstrate it's usage */
-    .user_ctx  = NULL  // "Hello World!"
+    .handler   = info_get_handler,
+    .user_ctx  = NULL 
 };
 
-/*
-// An HTTP POST handler 
-static esp_err_t echo_post_handler(httpd_req_t *req)
-{
-    char buf[100];
-    int ret, remaining = req->content_len;
 
-    while (remaining > 0) {
-        // Read the data for the request 
-        if ((ret = httpd_req_recv(req, buf,
-                        MIN(remaining, sizeof(buf)))) <= 0) {
-            if (ret == HTTPD_SOCK_ERR_TIMEOUT) {
-                // Retry receiving if timeout occurred
-                continue;
-            }
-            return ESP_FAIL;
-        }
-
-        // Send back the same data 
-        httpd_resp_send_chunk(req, buf, ret);
-        remaining -= ret;
-
-        //Log data received
-        ESP_LOGI(TAG, "=========== RECEIVED DATA ==========");
-        ESP_LOGI(TAG, "%.*s", ret, buf);
-        ESP_LOGI(TAG, "====================================");
-    }
-
-    // End response
-    httpd_resp_send_chunk(req, NULL, 0);
-    return ESP_OK;
-}
-
-static const httpd_uri_t echo = {
-    .uri       = "/echo",
-    .method    = HTTP_POST,
-    .handler   = echo_post_handler,
-    .user_ctx  = NULL
-};
-
-*/
 
 
 static void handle_leds(int led_num_value, int state_value)
@@ -454,91 +320,6 @@ static void handle_leds(int led_num_value, int state_value)
     }
 }
 
-/*
-We expect that there is a json in post body with such content:
-{
-"led_num": 1, // int
-"state": 0 // int or bool (may be 1 or 0)
-}
-
-curl -X POST http://192.168.0.100/leds -H 'Content-Type: application/json' -d '{"led_num":2,"state":1}'
-
-*/
-/*
-static esp_err_t leds_post_handler(httpd_req_t *req)
-{
-    char buf[100];
-    int ret = 0;
-    int remaining = req->content_len;
-
-    // Read the data from the request
-    while (remaining > 0) {
-        // This will copy the request body into the buffer
-        if ((ret = httpd_req_recv(req, buf, MIN(remaining, sizeof(buf)))) <= 0) {
-            if (ret == HTTPD_SOCK_ERR_TIMEOUT) {
-                // Retry receiving if timeout occurred
-                continue;
-            }
-            return ESP_FAIL;
-        }
-        remaining -= ret;
-    }
-
-    // Null-terminate the buffer
-    buf[ret] = '\0';
-    ESP_LOGI(TAG, "Received: %s", buf);
-
-    // Parse the JSON data
-    cJSON *json = cJSON_Parse(buf);
-    if (json == NULL) {
-        ESP_LOGE(TAG, "Failed to parse JSON");
-        return ESP_FAIL;
-    }
-
-    // Extract the "led_num" value
-    cJSON *led_num = cJSON_GetObjectItem(json, "led_num");
-    if (!cJSON_IsNumber(led_num)) {
-        ESP_LOGE(TAG, "Invalid led_num");
-        cJSON_Delete(json);
-        return ESP_FAIL;
-    }
-
-    // Extract the "state" value
-    cJSON *state = cJSON_GetObjectItem(json, "state");
-    if (!cJSON_IsNumber(state)) {
-        ESP_LOGE(TAG, "Invalid state");
-        cJSON_Delete(json);
-        return ESP_FAIL;
-    }
-
-    // Get the values
-    int led_num_value = led_num->valueint;
-    int state_value = state->valueint;
-
-    ESP_LOGI(TAG, "LED Number: %d, State: %d", led_num_value, state_value);
-
-    // Work with the values - for now just here
-    // in future - using queue
-    handle_leds(led_num_value, state_value);
-
-    // Clean up
-    cJSON_Delete(json);
-
-    // Send a response
-    const char resp[] = "Post request processed successfully \n";
-    httpd_resp_send(req, resp, strlen(resp));
-
-    return ESP_OK;
-}
-
-
-static const httpd_uri_t leds = {
-    .uri       = "/leds",
-    .method    = HTTP_POST,
-    .handler   = leds_post_handler,
-    .user_ctx  = NULL
-};
-*/
 
 // device can be controlled via POST request like that
 // curl -X POST http://esp32_pwm_lamp_0.local/pwm -H 'Content-Type: application/json' -d '{"channel":0,"duty":100}'
@@ -571,6 +352,8 @@ static esp_err_t pwm_post_handler(httpd_req_t *req)
     cJSON *json = cJSON_Parse(buf);
     if (json == NULL) {
         ESP_LOGE(TAG, "Failed to parse JSON");
+        char* resp = "RESULT: ERR_INCORRECT_JSON\n";
+        httpd_resp_send(req, resp, strlen(resp));
         return ESP_FAIL;
     }
 
@@ -578,6 +361,8 @@ static esp_err_t pwm_post_handler(httpd_req_t *req)
     cJSON *channel = cJSON_GetObjectItem(json, "channel");
     if (!cJSON_IsNumber(channel)) {
         ESP_LOGE(TAG, "Invalid channel");
+        char* resp = "RESULT: ERR_INVALID_CHANNEL_NUM\n";
+        httpd_resp_send(req, resp, strlen(resp));
         cJSON_Delete(json);
         return ESP_FAIL;
     }
@@ -586,6 +371,8 @@ static esp_err_t pwm_post_handler(httpd_req_t *req)
     cJSON *duty = cJSON_GetObjectItem(json, "duty");
     if (!cJSON_IsNumber(duty)) {
         ESP_LOGE(TAG, "Invalid duty");
+        char* resp = "RESULT: ERR_INVALID_DUTY_VALUE\n";
+        httpd_resp_send(req, resp, strlen(resp));
         cJSON_Delete(json);
         return ESP_FAIL;
     }
@@ -598,38 +385,45 @@ static esp_err_t pwm_post_handler(httpd_req_t *req)
 
     // Work with the values - for now just here
     // in future - using queue
+    
+    char resp[60];
     uint err_code = set_channel_pwm(channel_value, duty_value);
     if (err_code == PWM_OK)
     {
+        uint32_t  real_duty = ledc_get_duty(global_ledc_channel[channel_value].speed_mode, global_ledc_channel[channel_value].channel)*100/MAX_PWM_DUTY  + 1;
         // update global state struct
-        if (xSemaphoreTake(device_state_mutex, portMAX_DELAY) == pdTRUE) {
-        global_device_state.uptime = esp_timer_get_time()/1000000; // mks to s
-
-        uint32_t real_duty = ledc_get_duty(global_ledc_channel[channel_value].speed_mode, global_ledc_channel[channel_value].channel)*100/MAX_PWM_DUTY  + 1;
-        switch(channel_value)
+        if (xSemaphoreTake(device_state_mutex, portMAX_DELAY) == pdTRUE) 
         {
-        case 0:
-            global_device_state.ch0_pwm = real_duty; 
-            break;
-        case 1:
-            global_device_state.ch1_pwm = real_duty;
-            break;
-        case 2:
-            global_device_state.ch2_pwm = real_duty;
-            break;
-        case 3:
-            global_device_state.ch3_pwm = real_duty;
-            break;
+            global_device_state.uptime = esp_timer_get_time()/1000000; // mks to s
+
+            switch(channel_value)
+            {
+            case 0:
+                global_device_state.ch0_pwm = real_duty;
+                break;
+            case 1:
+                global_device_state.ch1_pwm = real_duty;
+                break;
+            case 2:
+                global_device_state.ch2_pwm = real_duty;
+                break;
+            case 3:
+                global_device_state.ch3_pwm = real_duty;
+                break;
+            }
+            // Release the mutex after accessing the shared data
+            xSemaphoreGive(device_state_mutex);
         }
-        // Release the mutex after accessing the shared data
-        xSemaphoreGive(device_state_mutex);
-    }
+
+        snprintf(resp, 60, "RESULT: %s; Set channel %d to %lu %% pwm\n", get_pwm_error_message(err_code), channel_value, real_duty);
+        httpd_resp_send(req, resp, strlen(resp));
 
     }
-
-    const char* resp = get_pwm_error_message(err_code);
-    // Send a response
-    httpd_resp_send(req, resp, strlen(resp));
+    else
+    {   //do we ever get here? 
+        snprintf(resp, 60, "RESULT: %s;", get_pwm_error_message(err_code));
+        httpd_resp_send(req, resp, strlen(resp));
+    }
 
     // Clean up
     cJSON_Delete(json);
@@ -646,6 +440,59 @@ static const httpd_uri_t pwm = {
 };
 
 
+// curl -X POST http://esp32_relay_1.local/reset -H 'Content-Type: text/html' -d 'force_reset'
+static esp_err_t reset_post_handler(httpd_req_t *req)
+{
+    char buf[100];
+    int ret = 0;
+    int remaining = req->content_len;
+
+    // Read the data from the request
+    while (remaining > 0) {
+        // This will copy the request body into the buffer
+        if ((ret = httpd_req_recv(req, buf, MIN(remaining, sizeof(buf)))) <= 0) {
+            if (ret == HTTPD_SOCK_ERR_TIMEOUT) {
+                // Retry receiving if timeout occurred
+                continue;
+            }
+            return ESP_FAIL;
+        }
+        remaining -= ret;
+    }
+
+    // Null-terminate the buffer
+    buf[ret] = '\0';
+    ESP_LOGI(TAG, "Received: %s", buf);
+
+    // check if it is real desire to reset
+    const char* reset_command = "force_reset";
+    if (strcmp(buf, reset_command) == 0)
+    {
+        ESP_LOGI(TAG, "User have sent force reset command, so rebooting");
+        char* resp = "User have sent force reset command, so rebooting\n";
+        httpd_resp_send(req, resp, strlen(resp));
+        vTaskDelay(1000 / portTICK_PERIOD_MS);
+        // make reset
+        esp_restart();
+        return ESP_OK;
+    }
+    else
+    {
+        ESP_LOGI(TAG, "User have sent incorrect reset command, so no rebooting");
+        char* resp = "User have sent incorrect reset command, so no rebooting\n";
+        httpd_resp_send(req, resp, strlen(resp));
+        return ESP_OK;
+    }
+}
+
+static const httpd_uri_t reset = {
+    .uri       = "/reset",
+    .method    = HTTP_POST,
+    .handler   = reset_post_handler,
+    .user_ctx  = NULL
+};
+
+
 static httpd_handle_t start_webserver(void)
 {
     httpd_handle_t server = NULL;
@@ -657,9 +504,9 @@ static httpd_handle_t start_webserver(void)
     if (httpd_start(&server, &config) == ESP_OK) {
         // Set URI handlers
         ESP_LOGI(TAG, "Registering URI handlers");
-        httpd_register_uri_handler(server, &hello);
+        httpd_register_uri_handler(server, &info);
         //httpd_register_uri_handler(server, &echo);
-        //httpd_register_uri_handler(server, &leds);
+        httpd_register_uri_handler(server, &reset);
         httpd_register_uri_handler(server, &pwm);
         #if CONFIG_EXAMPLE_BASIC_AUTH
         httpd_register_basic_auth(server);
@@ -760,6 +607,10 @@ void app_main(void)
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
 
+    // start mdns server on all default network interfaces
+    // https://docs.espressif.com/projects/esp-protocols/mdns/docs/latest/en/index.html
+    start_mdns_service();
+
     /* This helper function configures Wi-Fi or Ethernet, as selected in menuconfig.
      * Read "Establishing Wi-Fi or Ethernet Connection" section in
      * examples/protocols/README.md for more information about this function.
@@ -767,24 +618,21 @@ void app_main(void)
     ESP_ERROR_CHECK(example_connect());
 
 
+    // if we need some work with netif we can do
+    //esp_netif_t* default_netif_copy = esp_netif_get_default_netif();
+
     vTaskDelay( pdMS_TO_TICKS(10) );
     ESP_LOGI(TAG, "1");
-    gpio_set_direction(led1, GPIO_MODE_OUTPUT);
-    //ESP_LOGI(TAG, "1");
-    //gpio_set_direction(led2, GPIO_MODE_OUTPUT);
-    gpio_set_level(led1, 1);
-    //gpio_set_level(led2, 1);  // they are reversed
 
-        /**/
+    // turn on led 1 to indicate device activity
+    gpio_set_direction(led1, GPIO_MODE_OUTPUT);
+    gpio_set_level(led1, 1);
 
     /* Register event handlers to stop the server when Wi-Fi or Ethernet is disconnected,
      * and re-start it upon connection.
      */
     ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &connect_handler, &server));
     ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &disconnect_handler, &server));
-
-    // Start mDNS service
-    start_mdns_service();
 
     // very important time sync with sntp  ???
     // https://github.com/trombik/esp_wireguard/issues/29#issuecomment-1331375949
@@ -795,9 +643,11 @@ void app_main(void)
     // NECESSARITY OF USING SNTP SYNC IS VERY UNCLEAR
     // I REALLY HATE THIS LIB
 
+    /* Start the server for the first time */
+    server = start_webserver();
 
-    //ESP_ERROR_CHECK(wireguard_setup(&ctx));
 
+    // init wireguard
     ESP_LOGI(TAG, "Initializing WireGuard.");
     wg_config.private_key = CONFIG_WG_PRIVATE_KEY;
     wg_config.listen_port = CONFIG_WG_LOCAL_PORT;
@@ -821,11 +671,8 @@ void app_main(void)
     /*
     TODO:
     So if we activate CONFIG_ESP_NETIF_BRIDGE_EN or CONFIG_LWIP_PPP_SUPPORT in idf.py menuconfig, it will fix the problem.
-
     For a test, I tried activating "Enable PPP support (new/experimental)" (Name: LWIP_PPP_SUPPORT), and it works.
-
     So in short, activate CONFIG_LWIP_PPP_SUPPORT in your project configuration in ESP-IDF-v5, recompile your project, and the wireguard tunnel will work as intended.
-    
     */
     ESP_ERROR_CHECK(esp_wireguard_connect(&ctx));
 
@@ -849,22 +696,10 @@ void app_main(void)
         }
     }
 
-    //ESP_ERROR_CHECK(esp_wireguard_connect(&ctx));
-    /*
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "esp_wireguard_connect: %s", esp_err_to_name(err));
-        ESP_LOGE(TAG, "Halting due to error");
-        while (1) {
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-        }
-    }
-    */
     ESP_LOGI(TAG, "Peer is up");
     esp_wireguard_set_default(&ctx);
-    //ets_delay_us(1);
 
-    /* Start the server for the first time */
-    server = start_webserver();
+
 
     while (server) {
         vTaskDelay(1000 / portTICK_PERIOD_MS);
