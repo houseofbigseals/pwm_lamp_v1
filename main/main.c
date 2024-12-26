@@ -47,7 +47,7 @@ static wireguard_config_t wg_config = ESP_WIREGUARD_CONFIG_DEFAULT();
 #include "leds_pwm.h"
 #include "onewire_bus_impl_rmt.h"
 #include "ds18b20.h"
-    
+#include "esp_mac.h"
     
 #define EXAMPLE_ONEWIRE_BUS_GPIO    14
 #define EXAMPLE_ONEWIRE_MAX_DS18B20 2
@@ -81,6 +81,7 @@ typedef struct device_state{
     int ch3_pwm;
     float pcb_temp;
     float lamp_temp;
+    char current_mac[25];
     int64_t uptime;
 
 }device_state;
@@ -91,7 +92,17 @@ device_state global_device_state;
 // Global mutex for thread safety
 SemaphoreHandle_t device_state_mutex;
 
+void print_mac(const unsigned char *mac) {
+	printf("%02X:%02X:%02X:%02X:%02X:%02X \n", mac[0],mac[1],mac[2],mac[3],mac[4],mac[5]);
+}
 
+void get_current_mac(char* output_mac) {
+    unsigned char mac[6] = {0};
+    esp_efuse_mac_get_default(mac);
+    esp_read_mac(mac, ESP_MAC_WIFI_STA);
+    //char output_mac[60];
+	snprintf(output_mac, 20, "%02X:%02X:%02X:%02X:%02X:%02X", mac[0],mac[1],mac[2],mac[3],mac[4],mac[5]);
+}
 
 // Function to create cJSON object from device_state struct with thread safety
 cJSON *create_json_from_device_state_safe() {
@@ -112,6 +123,7 @@ cJSON *create_json_from_device_state_safe() {
         cJSON_AddNumberToObject(json, "ch3_pwm", global_device_state.ch3_pwm);
         cJSON_AddNumberToObject(json, "pcb_temp", global_device_state.pcb_temp);
         cJSON_AddNumberToObject(json, "lamp_temp", global_device_state.lamp_temp);
+        cJSON_AddStringToObject(json, "mac_addr", global_device_state.current_mac);
         cJSON_AddNumberToObject(json, "uptime", (double)global_device_state.uptime); // Cast to double for int64_t
         
         // Release the mutex after accessing the shared data
@@ -261,6 +273,7 @@ static esp_err_t info_get_handler(httpd_req_t *req)
     if (xSemaphoreTake(device_state_mutex, portMAX_DELAY) == pdTRUE) {
         global_device_state.uptime = esp_timer_get_time()/1000000; // Cast to double for int64_t
         global_device_state.pcb_temp = read_pcb_temp();  
+        get_current_mac(global_device_state.current_mac);
         // Release the mutex after accessing the shared data
         xSemaphoreGive(device_state_mutex);
     }
@@ -572,8 +585,8 @@ void app_main(void)
     global_device_state.ch1_pwm = 0;
     global_device_state.ch2_pwm = 0;
     global_device_state.ch3_pwm = 0;
-    global_device_state.pcb_temp = 0;
-    global_device_state.lamp_temp = 0;
+    global_device_state.pcb_temp = -255;
+    global_device_state.lamp_temp = -255;
     global_device_state.uptime = esp_timer_get_time()/1000000; // mks to seconds
 
     // Create the mutex before using it
@@ -644,6 +657,7 @@ void app_main(void)
     // I REALLY HATE THIS LIB
 
     /* Start the server for the first time */
+    get_current_mac(global_device_state.current_mac);  // fill mac first time
     server = start_webserver();
 
 
@@ -701,7 +715,28 @@ void app_main(void)
 
 
 
-    while (server) {
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
+    while (server) 
+    {
+        /*
+        unsigned char mac_base[6] = {0};
+        esp_efuse_mac_get_default(mac_base);
+        esp_read_mac(mac_base, ESP_MAC_WIFI_STA);
+        unsigned char mac_local_base[6] = {0};
+        unsigned char mac_uni_base[6] = {0};
+        esp_derive_local_mac(mac_local_base, mac_uni_base);
+        printf("Local Address: ");
+        print_mac(mac_local_base); 
+        printf("Uni Address: ");
+        print_mac(mac_uni_base);
+        printf("MAC Address: ");
+        print_mac(mac_base);
+        printf("MAC Address again: ");
+        char s[25];
+        get_current_mac(s);
+        printf("%s\n", s);
+        printf("free internal heap: ");
+        printf("%lu \n", esp_get_free_internal_heap_size());
+        */
+        vTaskDelay(2000 / portTICK_PERIOD_MS);
     }
 }
